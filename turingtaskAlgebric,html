@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Calculus Explorer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/9.4.4/math.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.3.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #graph, #info { width: 100%; height: 400px; }
+        .controls, .results { margin: 10px; }
+        .slider { width: 80%; }
+    </style>
+</head>
+<body>
+    <h1>Calculus Explorer</h1>
+    <div class="controls">
+        <label for="funcInput">Function: f(x) = </label>
+        <input type="text" id="funcInput" value="x^3 - 6*x^2 + 4*x + 12">
+        <button onclick="plotFunction()">Plot</button>
+    </div>
+
+    <div id="graph"></div>
+
+    <div class="controls">
+        <label for="tangentSlider">Tangent at x = </label>
+        <input type="range" id="tangentSlider" min="-10" max="10" value="0" step="0.1" oninput="updateTangent(this.value)">
+    </div>
+
+    <div id="info" class="results"></div>
+
+    <script>
+    let currentFunction, derivative, secondDerivative;
+    let layout = {
+        title: 'Function and Derivatives',
+        xaxis: {range: [-10, 10]},
+        yaxis: {range: [-50, 50]}
+    };
+
+    function plotFunction() {
+        const funcInput = document.getElementById('funcInput').value;
+        currentFunction = math.parse(funcInput).compile();
+        derivative = math.derivative(funcInput, 'x').compile();
+        secondDerivative = math.derivative(math.derivative(funcInput, 'x').toString(), 'x').compile();
+
+        const xValues = math.range(-10, 10, 0.1).toArray();
+        const yValues = xValues.map(x => currentFunction.evaluate({x: x}));
+        const dyValues = xValues.map(x => derivative.evaluate({x: x}));
+        const d2yValues = xValues.map(x => secondDerivative.evaluate({x: x}));
+
+        const trace1 = {x: xValues, y: yValues, mode: 'lines', name: 'f(x)'};
+        const trace2 = {x: xValues, y: dyValues, mode: 'lines', name: "f'(x)", yaxis: 'y2'};
+        const trace3 = {x: xValues, y: d2yValues, mode: 'lines', name: "f''(x)", yaxis: 'y3'};
+
+        Plotly.newPlot('graph', [trace1, trace2, trace3], {
+            ...layout,
+            yaxis2: {overlaying: 'y', side: 'right'},
+            yaxis3: {overlaying: 'y', side: 'right', position: 1}
+        });
+
+        updateInfo();
+    }
+    function analyzeCriticalPoints(criticalPoints) {
+    const results = [];
+    criticalPoints.forEach(point => {
+        const x = parseFloat(point);
+        const fPrime = derivative.evaluate({x: x});
+        const fDoublePrime = secondDerivative.evaluate({x: x});
+        if (fPrime === 0) {
+            if (fDoublePrime > 0) {
+                results.push(`Minima at x = ${x} (f''(x) = ${fDoublePrime})`);
+            } else if (fDoublePrime < 0) {
+                results.push(`Maxima at x = ${x} (f''(x) = ${fDoublePrime})`);
+            } else {
+                results.push(`Saddle point at x = ${x} (f''(x) = ${fDoublePrime})`);
+            }
+        }
+    });
+    return results;
+}
+
+    function updateTangent(x) {
+        const y = currentFunction.evaluate({x: x});
+        const slope = derivative.evaluate({x: x});
+        const tangentY = math.range(y - 10*slope, y + 10*slope, 0.1).toArray();
+        const tangentX = tangentY.map(y => x + (y - y) / slope);
+
+        Plotly.restyle('graph', {
+            'x': [tangentX], 
+            'y': [tangentY]
+        }, [3]); // Assuming tangent line is the 4th trace
+    }
+    function solveEquation(expr, range) {
+        const step = 0.1;
+        const roots = [];
+        for (let x = range[0]; x <= range[1]; x += step) {
+            const y1 = expr.evaluate({x: x});
+            const y2 = expr.evaluate({x: x + step});
+            if (y1 * y2 < 0) {
+                roots.push(x.toFixed(2));
+            }
+        }
+        return roots;
+    }
+
+   function updateInfo() {
+    const x = parseFloat(document.getElementById('tangentSlider').value);
+    const infoDiv = document.getElementById('info');
+
+    // Find critical points and inflection points
+    const criticalPoints = solveEquation(derivative, [-10, 10]);
+    const inflectionPoints = solveEquation(secondDerivative, [-10, 10]);
+
+    // Analyze critical points for maxima/minima
+    const extremaAnalysis = analyzeCriticalPoints(criticalPoints);
+
+    const y = currentFunction.evaluate({x: x});
+    const dy = derivative.evaluate({x: x});
+    const d2y = secondDerivative.evaluate({x: x});
+
+    infoDiv.innerHTML = `
+        <h2>Function Analysis</h2>
+        <p>f(${x}) = ${currentFunction.evaluate({x: x})}</p>
+            <p>f'(${x}) = ${derivative.evaluate({x: x})}</p>
+            <p>f''(${x}) = ${secondDerivative.evaluate({x: x})}</p>
+        <p><b>Critical Points (f'(x) = 0):</b> ${criticalPoints.join(', ')}</p>
+        <p><b>Inflection Points (f''(x) = 0):</b> ${inflectionPoints.join(', ')}</p>
+        <p><b>Maxima/Minima:</b><br>${extremaAnalysis.join('<br>')}</p>
+        <p><b>Concavity:</b> ${d2y > 0 ? 'Concave Up' : d2y < 0 ? 'Concave Down' : 'None'}</p>
+    `;
+}
+
+    // Initial plot
+    plotFunction();
+    </script>
+</body>
+</html>

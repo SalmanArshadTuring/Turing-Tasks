@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Runner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+        #game-container {
+            display: inline-grid;
+            gap: 1px;
+            background-color: #333;
+            padding: 1px;
+            margin: 20px 0;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #fff;
+        }
+        .wall {
+            background-color: #333;
+        }
+        .player {
+            background-color: #ff0000;
+            border-radius: 50%;
+        }
+        .goal {
+            background-color: #00ff00;
+        }
+        .coin {
+            background-color: #ffff00;
+            border-radius: 50%;
+        }
+        #info {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #start-button {
+            font-size: 18px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Maze Runner</h1>
+    <div id="info">
+        Level: <span id="level">1</span> | 
+        Time: <span id="timer">30</span>s | 
+        Coins: <span id="coins">0</span>/3
+    </div>
+    <div id="game-container"></div>
+    <button id="start-button">Start Game</button>
+    <div id="message"></div>
+
+
+    <script>
+        const gameContainer = document.getElementById('game-container');
+        const levelSpan = document.getElementById('level');
+        const timerSpan = document.getElementById('timer');
+        const coinsSpan = document.getElementById('coins');
+        const startButton = document.getElementById('start-button');
+        const message = document.getElementById('message');
+
+
+
+
+        let player = { x: 0, y: 0 };
+        let goal = { x: 0, y: 0 };
+        let coins = [];
+        let maze = [];
+        let level = 1;
+        let timer = 30;
+        let collectedCoins = 0;
+        let gameInterval;
+
+        const levels = [
+            {
+                layout: [
+                    [0, 0, 1, 1, 1],
+                    [1, 0, 0, 0, 1],
+                    [1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0],
+                    [1, 1, 1, 1, 0]
+                ],
+                playerStart: { x: 0, y: 0 },
+                goal: { x: 4, y: 4 },
+                coins: [{ x: 1, y: 1 }, { x: 3, y: 1 }, { x: 3, y: 3 }]
+            },
+            {
+                layout: [
+                    [0, 0, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 1, 1, 1, 0, 1],
+                    [1, 0, 0, 0, 0, 1],
+                    [1, 0, 1, 1, 1, 1],
+                    [1, 0, 0, 0, 0, 0]
+                ],
+                playerStart: { x: 0, y: 0 },
+                goal: { x: 5, y: 5 },
+                coins: [{ x: 1, y: 1 }, { x: 4, y: 1 }, { x: 1, y: 3 }]
+            }
+        ];
+
+        function createMaze() {
+            const currentLevel = levels[level - 1];
+            maze = currentLevel.layout;
+            player = { ...currentLevel.playerStart };
+            goal = { ...currentLevel.goal };
+            coins = [...currentLevel.coins];
+
+            gameContainer.style.gridTemplateColumns = `repeat(${maze[0].length}, 30px)`;
+            gameContainer.innerHTML = '';
+
+            for (let y = 0; y < maze.length; y++) {
+                for (let x = 0; x < maze[y].length; x++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    if (maze[y][x] === 1) cell.classList.add('wall');
+                    gameContainer.appendChild(cell);
+                }
+            }
+
+            updateGameState();
+        }
+       function showMessage(text) {
+    const message = document.getElementById('message');
+    message.textContent = text;
+    setTimeout(() => (message.textContent = ''), 3000);
+}
+
+        function updateGameState() {
+            const cells = gameContainer.getElementsByClassName('cell');
+            for (let y = 0; y < maze.length; y++) {
+                for (let x = 0; x < maze[y].length; x++) {
+                    const index = y * maze[y].length + x;
+                    cells[index].classList.remove('player', 'goal', 'coin');
+                }
+            }
+
+            const playerIndex = player.y * maze[0].length + player.x;
+            cells[playerIndex].classList.add('player');
+
+            const goalIndex = goal.y * maze[0].length + goal.x;
+            cells[goalIndex].classList.add('goal');
+
+            coins.forEach(coin => {
+                const coinIndex = coin.y * maze[0].length + coin.x;
+                cells[coinIndex].classList.add('coin');
+            });
+
+            coinsSpan.textContent = `${collectedCoins}/${coins.length}`;
+        }
+
+        function movePlayer(dx, dy) {
+            const newX = player.x + dx;
+            const newY = player.y + dy;
+
+            if (newX >= 0 && newX < maze[0].length && newY >= 0 && newY < maze.length && maze[newY][newX] !== 1) {
+                player.x = newX;
+                player.y = newY;
+
+                const coinIndex = coins.findIndex(coin => coin.x === player.x && coin.y === player.y);
+                if (coinIndex !== -1) {
+                    coins.splice(coinIndex, 1);
+                    collectedCoins++;
+                }
+
+                if (player.x === goal.x && player.y === goal.y) {
+                    if (collectedCoins === 3) {
+                        nextLevel();
+                    } else {
+                        alert('Collect all coins before reaching the goal!');
+                    }
+                }
+
+                updateGameState();
+            }
+        }
+
+       function nextLevel() {
+    level++;
+    levelSpan.textContent = level;
+
+    if (level <= levels.length) {
+        showMessage(`Congratulations! Moving to level ${level}`);
+        startGame();
+    } else {
+        clearInterval(gameInterval); // Stop the timer
+        showMessage('Congratulations! You completed all levels!');
+        startButton.textContent = 'Play Again';
+        startButton.style.display = 'block';
+    }
+}
+
+        function startGame() {
+            clearInterval(gameInterval);
+            timer = 30;
+            collectedCoins = 0;
+            createMaze();
+            startButton.style.display = 'none';
+
+            gameInterval = setInterval(() => {
+                timer--;
+                timerSpan.textContent = timer;
+                if (timer <= 0) {
+                    clearInterval(gameInterval);
+                    alert('Time\'s up! Game over.');
+                    startButton.textContent = 'Play Again';
+                    startButton.style.display = 'block';
+                }
+            }, 1000);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                    movePlayer(0, -1);
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    movePlayer(0, 1);
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                    movePlayer(-1, 0);
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    movePlayer(1, 0);
+                    break;
+            }
+        });
+
+        startButton.addEventListener('click', () => {
+            level = 1;
+            levelSpan.textContent = level;
+            startGame();
+        });
+    </script>
+</body>
+</html>

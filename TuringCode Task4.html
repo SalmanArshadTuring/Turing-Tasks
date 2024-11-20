@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Structure Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/sentiment@5.0.2/build/sentiment.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #app {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        #article-input {
+            margin-bottom: 20px;
+        }
+
+        #visualizations {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        #treemap, #keyword-chart, #timeline {
+            width: 48%;
+            height: 400px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+
+        #search {
+            margin-bottom: 20px;
+        }
+
+        #original-content {
+            border-top: 1px solid #ccc;
+            padding-top: 20px;
+        }
+
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 8px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        mark {
+            background-color: yellow;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="article-input">
+            <textarea id="article-text" rows="10" cols="50" placeholder="Enter your article here..."></textarea>
+            <button id="analyze-btn">Analyze Article</button>
+        </div>
+        <div id="visualizations">
+            <div id="treemap">Treemap visualization will appear here.</div>
+            <div id="keyword-chart">Keyword chart will appear here.</div>
+            <div id="timeline">Timeline visualization will appear here.</div>
+        </div>
+        <div id="search">
+            <input type="text" id="search-input" placeholder="Search keywords">
+            <button id="search-btn">Search</button>
+        </div>
+        <div id="original-content">Original content will appear here.</div>
+    </div>
+    <script>
+        const app = {
+            init() {
+                this.article = '';
+                this.structure = [];
+                this.keywords = {};
+                this.sentiment = new Sentiment();
+                this.bindEvents();
+            },
+
+            bindEvents() {
+                document.getElementById('analyze-btn').addEventListener('click', () => this.analyzeArticle());
+                document.getElementById('search-btn').addEventListener('click', () => this.searchKeyword());
+            },
+
+            analyzeArticle() {
+                this.article = document.getElementById('article-text').value;
+                if (!this.article.trim()) {
+                    alert("Please enter a valid article.");
+                    return;
+                }
+
+                this.structure = this.parseArticleStructure(this.article);
+                this.keywords = this.extractKeywords(this.article);
+
+                this.renderVisualizations();
+                this.renderOriginalContent();
+            },
+
+            parseArticleStructure(article) {
+                const lines = article.split('\n');
+                const structure = [];
+                let currentSection = null;
+
+                lines.forEach(line => {
+                    if (line.startsWith('# ')) {
+                        currentSection = { type: 'heading', content: line.slice(2), children: [] };
+                        structure.push(currentSection);
+                    } else if (line.startsWith('## ')) {
+                        const subheading = { type: 'subheading', content: line.slice(3), children: [] };
+                        if (currentSection) {
+                            currentSection.children.push(subheading);
+                        } else {
+                            structure.push(subheading);
+                        }
+                    } else if (line.trim() !== '') {
+                        const paragraph = { type: 'paragraph', content: line };
+                        if (currentSection) {
+                            currentSection.children.push(paragraph);
+                        } else {
+                            structure.push(paragraph);
+                        }
+                    }
+                });
+
+                return structure;
+            },
+
+            extractKeywords(article) {
+                const words = article.toLowerCase().match(/\b\w+\b/g);
+                const stopWords = new Set(['the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'and', 'or', 'but']);
+                const keywords = {};
+
+                words.forEach(word => {
+                    if (!stopWords.has(word)) {
+                        keywords[word] = (keywords[word] || 0) + 1;
+                    }
+                });
+
+                return keywords;
+            },
+
+            renderVisualizations() {
+                this.renderTreemap();
+                this.renderKeywordChart();
+                this.renderTimeline();
+            },
+
+            renderTreemap() {
+                const width = 600;
+                const height = 400;
+
+                const treemapData = {
+                    name: 'Article',
+                    children: this.structure.map(section => ({
+                        name: section.content,
+                        children: section.children.map(child => ({
+                            name: child.content,
+                            value: child.content.length,
+                            sentiment: this.sentiment.analyze(child.content).score
+                        }))
+                    }))
+                };
+
+                const treemap = d3.treemap()
+                    .size([width, height])
+                    .padding(1)
+                    .round(true);
+
+                const root = d3.hierarchy(treemapData)
+                    .sum(d => d.value)
+                    .sort((a, b) => b.value - a.value);
+
+                treemap(root);
+
+                const svg = d3.select('#treemap')
+                    .html('') // Clear any existing content
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height);
+
+                const cell = svg.selectAll('g')
+                    .data(root.leaves())
+                    .enter().append('g')
+                    .attr('transform', d => `translate(${d.x0},${d.y0})`);
+
+                cell.append('rect')
+                    .attr('width', d => d.x1 - d.x0)
+                    .attr('height', d => d.y1 - d.y0)
+                    .attr('fill', d => d3.interpolateRdYlGn((d.data.sentiment + 5) / 10))
+                    .attr('stroke', '#fff');
+
+                cell.append('text')
+                    .attr('x', 5)
+                    .attr('y', 20)
+                    .text(d => d.data.name);
+            },
+
+            renderKeywordChart() {
+                const width = 600;
+                const height = 300;
+                const margin = { top: 20, right: 20, bottom: 30, left: 40 };
+
+                const svg = d3.select('#keyword-chart')
+                    .html('') // Clear existing content
+                    .append('svg')
+                    .attr('width', width + margin.left + margin.right)
+                    .attr('height', height + margin.top + margin.bottom)
+                    .append('g')
+                    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+                const x = d3.scaleBand()
+                    .range([0, width])
+                    .padding(0.1);
+
+                const y = d3.scaleLinear()
+                    .range([height, 0]);
+
+                const data = Object.entries(this.keywords)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10); // Show top 10 keywords
+
+                x.domain(data.map(d => d[0]));
+                y.domain([0, d3.max(data, d => d[1])]);
+
+                svg.selectAll('.bar')
+                    .data(data)
+                    .enter().append('rect')
+                    .attr('class', 'bar')
+                    .attr('x', d => x(d[0]))
+                    .attr('width', x.bandwidth())
+                    .attr('y', d => y(d[1]))
+                    .attr('height', d => height - y(d[1]))
+                    .attr('fill', 'steelblue');
+
+                svg.append('g')
+                    .attr('transform', `translate(0,${height})`)
+                    .call(d3.axisBottom(x))
+                    .selectAll('text')
+                    .attr('transform', 'rotate(-45)')
+                    .style('text-anchor', 'end');
+
+                svg.append('g')
+                    .call(d3.axisLeft(y));
+            },
+
+            renderTimeline() {
+                const width = 800;
+                const height = 100;
+
+                const svg = d3.select('#timeline')
+                    .html('') // Clear existing content
+                    .append('svg')
+                    .attr('width', width)
+                    .attr('height', height);
+
+                const sentimentData = this.structure.flatMap(section =>
+                    section.children.map(child => this.sentiment.analyze(child.content).score)
+                );
+
+                const x = d3.scaleLinear()
+                    .domain([0, sentimentData.length - 1])
+                    .range([0, width]);
+
+                const y = d3.scaleLinear()
+                    .domain([-5, 5])
+                    .range([height, 0]);
+
+                const line = d3.line()
+                    .x((_, i) => x(i))
+                    .y(d => y(d));
+
+                svg.append('path')
+                    .datum(sentimentData)
+                    .attr('fill', 'none')
+                    .attr('stroke', 'steelblue')
+                    .attr('stroke-width', 1.5)
+                    .attr('d', line);
+            },
+
+            renderOriginalContent() {
+                const contentDiv = document.getElementById('original-content');
+                contentDiv.innerHTML = '';
+
+                this.structure.forEach(section => {
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.className = 'section';
+
+                    const heading = document.createElement('h2');
+                    heading.textContent = section.content;
+                    sectionDiv.appendChild(heading);
+
+                    section.children.forEach(child => {
+                        if (child.type === 'subheading') {
+                            const subheading = document.createElement('h3');
+                            subheading.textContent = child.content;
+                            sectionDiv.appendChild(subheading);
+                        } else {
+                            const paragraph = document.createElement('p');
+                            paragraph.textContent = child.content;
+                            sectionDiv.appendChild(paragraph);
+                        }
+                    });
+
+                    contentDiv.appendChild(sectionDiv);
+                });
+            }
+        };
+
+        // Initialize the application
+        app.init();
+    </script>
+</body>
+</html>

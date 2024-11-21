@@ -50,10 +50,12 @@
         let asteroids = [];
         let projectiles = [];
         let gameOverFlag = false;
+        let invincible = false; // Cooldown flag to prevent rapid lives decrement
 
         const sounds = {
             shoot: new Howl({ src: ['https://assets.codepen.io/21542/howler-shoot.mp3'] }),
             explosion: new Howl({ src: ['https://assets.codepen.io/21542/howler-explosion.mp3'] }),
+            powerUp: new Howl({ src: ['https://assets.codepen.io/21542/howler-powerup.mp3'] }),
             backgroundMusic: new Howl({
                 src: ['https://assets.codepen.io/21542/howler-space-game-loop.mp3'],
                 loop: true,
@@ -77,7 +79,7 @@
                 ctx.lineTo(-10, -10);
                 ctx.lineTo(-10, 10);
                 ctx.closePath();
-                ctx.fillStyle = '#fff';
+                ctx.fillStyle = invincible ? 'rgba(255,255,0,0.6)' : '#fff'; // Yellow if invincible
                 ctx.fill();
                 ctx.restore();
             },
@@ -110,10 +112,11 @@
         };
 
         class Asteroid {
-            constructor(x, y, radius) {
+            constructor(x, y, radius, type) {
                 this.x = x;
                 this.y = y;
                 this.radius = radius;
+                this.type = type; // "silver" or "color"
                 this.speed = Math.random() * 2 + 1;
                 this.angle = Math.random() * Math.PI * 2;
             }
@@ -121,7 +124,7 @@
             draw() {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#888';
+                ctx.fillStyle = this.type === 'silver' ? '#888' : (this.type === 'color' ? '#f0f' : '#0ff'); // Silver or colored
                 ctx.fill();
             }
 
@@ -137,6 +140,7 @@
         }
 
         function spawnAsteroid() {
+            const type = Math.random() < 0.7 ? 'silver' : 'color'; // 70% chance of silver, 30% colored
             let x, y;
             if (Math.random() < 0.5) {
                 x = Math.random() < 0.5 ? 0 : canvas.width;
@@ -145,7 +149,7 @@
                 x = Math.random() * canvas.width;
                 y = Math.random() < 0.5 ? 0 : canvas.height;
             }
-            asteroids.push(new Asteroid(x, y, Math.random() * 20 + 20));
+            asteroids.push(new Asteroid(x, y, Math.random() * 20 + 20, type));
         }
 
         function checkCollisions() {
@@ -155,17 +159,30 @@
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
                 if (distance < spaceship.radius + asteroid.radius) {
-                    if (lives > 0) {
-                        asteroids.splice(aIndex, 1);
+                    if (asteroid.type === 'silver' && !invincible) {
+                        // Collision with silver ball: decrement lives
                         lives--;
                         livesElement.textContent = lives;
-
-                        if (lives === 0) {
-                            gameOver();
-                        }
+                        asteroids.splice(aIndex, 1); // Remove the asteroid
+                        sounds.explosion.play();
+                        if (lives <= 0) gameOver();
+                        triggerInvincibility();
+                    } else if (asteroid.type === 'color') {
+                        // Collision with colored ball: increase score
+                        score += 50;
+                        scoreElement.textContent = score;
+                        asteroids.splice(aIndex, 1); // Remove the asteroid
+                        sounds.powerUp.play();
                     }
                 }
             });
+        }
+
+        function triggerInvincibility() {
+            invincible = true;
+            setTimeout(() => {
+                invincible = false;
+            }, 3000); // 3 seconds of invincibility
         }
 
         function gameOver() {
@@ -183,21 +200,6 @@
             sounds.backgroundMusic.stop();
         }
 
-        function restartGame() {
-            score = 0;
-            lives = 3;
-            asteroids = [];
-            projectiles = [];
-            gameOverFlag = false;
-            scoreElement.textContent = score;
-            livesElement.textContent = lives;
-            spaceship.x = canvas.width / 2;
-            spaceship.y = canvas.height / 2;
-            spaceship.angle = -Math.PI / 2; // Reset angle
-            sounds.backgroundMusic.play();
-            gameLoop = requestAnimationFrame(update);
-        }
-
         function update() {
             if (gameOverFlag) return;
 
@@ -213,9 +215,7 @@
 
             checkCollisions();
 
-            if (Math.random() < 0.02 && asteroids.length < 10) {
-                spawnAsteroid();
-            }
+            if (Math.random() < 0.02) spawnAsteroid();
 
             gameLoop = requestAnimationFrame(update);
         }
@@ -236,7 +236,18 @@
                     break;
                 case ' ':
                     if (gameOverFlag) {
-                        restartGame();
+                        score = 0;
+                        lives = 3;
+                        asteroids = [];
+                        projectiles = [];
+                        gameOverFlag = false;
+                        scoreElement.textContent = score;
+                        livesElement.textContent = lives;
+                        spaceship.x = canvas.width / 2;
+                        spaceship.y = canvas.height / 2;
+                        spaceship.angle = -Math.PI / 2;
+                        sounds.backgroundMusic.play();
+                        update();
                     } else {
                         spaceship.shoot();
                     }
@@ -245,7 +256,7 @@
         });
 
         sounds.backgroundMusic.play();
-        gameLoop = requestAnimationFrame(update);
+        update();
     </script>
 </body>
 </html>

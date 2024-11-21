@@ -44,7 +44,6 @@
         const scoreElement = document.getElementById('score');
         const livesElement = document.getElementById('lives');
 
-        // Game variables
         let score = 0;
         let lives = 3;
         let gameLoop;
@@ -62,12 +61,11 @@
             })
         };
 
-        // Spaceship
         const spaceship = {
             x: canvas.width / 2,
             y: canvas.height / 2,
             radius: 20,
-            angle: 0,
+            angle: -Math.PI / 2, // Default angle points upwards
             speed: 5,
             rotationSpeed: 0.1,
             draw() {
@@ -84,8 +82,8 @@
                 ctx.restore();
             },
             move(direction) {
-                const dx = Math.cos(this.angle - Math.PI / 2) * this.speed * direction;
-                const dy = Math.sin(this.angle - Math.PI / 2) * this.speed * direction;
+                const dx = Math.cos(this.angle) * this.speed * direction;
+                const dy = Math.sin(this.angle) * this.speed * direction;
                 this.x += dx;
                 this.y += dy;
 
@@ -100,18 +98,17 @@
             },
             shoot() {
                 const projectile = {
-                    x: this.x + Math.cos(this.angle - Math.PI / 2) * 20,
-                    y: this.y + Math.sin(this.angle - Math.PI / 2) * 20,
+                    x: this.x + Math.cos(this.angle) * 20,
+                    y: this.y + Math.sin(this.angle) * 20,
                     radius: 3,
                     speed: 10,
-                    angle: this.angle - Math.PI / 2
+                    angle: this.angle
                 };
                 projectiles.push(projectile);
                 sounds.shoot.play();
             }
         };
 
-        // Asteroid class
         class Asteroid {
             constructor(x, y, radius) {
                 this.x = x;
@@ -132,7 +129,6 @@
                 this.x += Math.cos(this.angle) * this.speed;
                 this.y += Math.sin(this.angle) * this.speed;
 
-                // Wrap around screen edges
                 if (this.x < -this.radius) this.x = canvas.width + this.radius;
                 if (this.x > canvas.width + this.radius) this.x = -this.radius;
                 if (this.y < -this.radius) this.y = canvas.height + this.radius;
@@ -197,6 +193,7 @@
             livesElement.textContent = lives;
             spaceship.x = canvas.width / 2;
             spaceship.y = canvas.height / 2;
+            spaceship.angle = -Math.PI / 2; // Reset angle
             sounds.backgroundMusic.play();
             gameLoop = requestAnimationFrame(update);
         }
@@ -207,10 +204,8 @@
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Move and draw spaceship
             spaceship.draw();
 
-            // Move and draw asteroids
             asteroids.forEach((asteroid) => {
                 asteroid.move();
                 asteroid.draw();
@@ -218,7 +213,6 @@
 
             checkCollisions();
 
-            // Spawn new asteroids
             if (Math.random() < 0.02 && asteroids.length < 10) {
                 spawnAsteroid();
             }

@@ -1,4 +1,3 @@
-//here is the ideal response
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -51,15 +50,11 @@
         let gameLoop;
         let asteroids = [];
         let projectiles = [];
-        let powerUps = [];
-        let bossFight = false;
-        let boss = null;
+        let gameOverFlag = false;
 
-        // Sound effects
         const sounds = {
             shoot: new Howl({ src: ['https://assets.codepen.io/21542/howler-shoot.mp3'] }),
             explosion: new Howl({ src: ['https://assets.codepen.io/21542/howler-explosion.mp3'] }),
-            powerUp: new Howl({ src: ['https://assets.codepen.io/21542/howler-powerup.mp3'] }),
             backgroundMusic: new Howl({
                 src: ['https://assets.codepen.io/21542/howler-space-game-loop.mp3'],
                 loop: true,
@@ -75,8 +70,6 @@
             angle: 0,
             speed: 5,
             rotationSpeed: 0.1,
-            shieldActive: false,
-            rapidFireActive: false,
             draw() {
                 ctx.save();
                 ctx.translate(this.x, this.y);
@@ -89,18 +82,14 @@
                 ctx.fillStyle = '#fff';
                 ctx.fill();
                 ctx.restore();
-
-                if (this.shieldActive) {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.radius + 10, 0, Math.PI * 2);
-                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
-                    ctx.lineWidth = 3;
-                    ctx.stroke();
-                }
             },
             move(direction) {
-                this.x += Math.cos(this.angle) * this.speed * -direction;
-                this.y += Math.sin(this.angle) * this.speed * -direction;
+                const dx = Math.cos(this.angle - Math.PI / 2) * this.speed * direction;
+                const dy = Math.sin(this.angle - Math.PI / 2) * this.speed * direction;
+                this.x += dx;
+                this.y += dy;
+
+                // Wrap around screen edges
                 if (this.x < 0) this.x = canvas.width;
                 if (this.x > canvas.width) this.x = 0;
                 if (this.y < 0) this.y = canvas.height;
@@ -111,11 +100,11 @@
             },
             shoot() {
                 const projectile = {
-                    x: this.x + Math.cos(this.angle) * 20,
-                    y: this.y + Math.sin(this.angle) * 20,
+                    x: this.x + Math.cos(this.angle - Math.PI / 2) * 20,
+                    y: this.y + Math.sin(this.angle - Math.PI / 2) * 20,
                     radius: 3,
                     speed: 10,
-                    angle: this.angle
+                    angle: this.angle - Math.PI / 2
                 };
                 projectiles.push(projectile);
                 sounds.shoot.play();
@@ -151,56 +140,6 @@
             }
         }
 
-        // Boss class
-        class Boss extends Asteroid {
-            constructor() {
-                super(canvas.width / 2, -100, 80);
-                this.health = 100;
-                this.attackTimer = 0;
-            }
-
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#f00';
-                ctx.fill();
-
-                // Draw health bar
-                ctx.fillStyle = '#0f0';
-                ctx.fillRect(this.x - 40, this.y - this.radius - 10, this.health * 0.8, 5);
-            }
-
-            attack() {
-                this.attackTimer++;
-                if (this.attackTimer >= 60) {
-                    this.attackTimer = 0;
-                    for (let i = 0; i < 8; i++) {
-                        const angle = (Math.PI * 2 / 8) * i;
-                        asteroids.push(new Asteroid(this.x + Math.cos(angle) * this.radius,
-                                                    this.y + Math.sin(angle) * this.radius, 20));
-                    }
-                }
-            }
-        }
-
-        // Power-up class
-        class PowerUp {
-            constructor(x, y, type) {
-                this.x = x;
-                this.y = y;
-                this.radius = 10;
-                this.type = type;
-            }
-
-            draw() {
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.type === 'shield' ? '#0ff' : '#f0f';
-                ctx.fill();
-            }
-        }
-
-        // Game functions
         function spawnAsteroid() {
             let x, y;
             if (Math.random() < 0.5) {
@@ -213,117 +152,38 @@
             asteroids.push(new Asteroid(x, y, Math.random() * 20 + 20));
         }
 
-        function spawnPowerUp() {
-            const x = Math.random() * canvas.width;
-            const y = Math.random() * canvas.height;
-            const type = Math.random() < 0.5 ? 'shield' : 'rapidFire';
-            powerUps.push(new PowerUp(x, y, type));
-        }
-
         function checkCollisions() {
-            // Projectile-Asteroid collisions
-            projectiles.forEach((projectile, pIndex) => {
-                asteroids.forEach((asteroid, aIndex) => {
-                    const dx = projectile.x - asteroid.x;
-                    const dy = projectile.y - asteroid.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < projectile.radius + asteroid.radius) {
-                        projectiles.splice(pIndex, 1);
-                        if (asteroid.radius > 20) {
-                            asteroids.push(new Asteroid(asteroid.x, asteroid.y, asteroid.radius / 2));
-                            asteroids.push(new Asteroid(asteroid.x, asteroid.y, asteroid.radius / 2));
-                        }
-                        asteroids.splice(aIndex, 1);
-                        score += 10;
-                        scoreElement.textContent = score;
-                        sounds.explosion.play();
-
-                        if (score >= 500 && !bossFight) {
-                            bossFight = true;
-                            boss = new Boss();
-                        }
-                    }
-                });
-
-                if (boss) {
-                    const dx = projectile.x - boss.x;
-                    const dy = projectile.y - boss.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance < projectile.radius + boss.radius) {
-                        projectiles.splice(pIndex, 1);
-                        boss.health -= 5;
-                        sounds.explosion.play();
-
-                        if (boss.health <= 0) {
-                            boss = null;
-                            bossFight = false;
-                            score += 1000;
-                            scoreElement.textContent = score;
-                        }
-                    }
-                }
-            });
-
-            // Spaceship-Asteroid collisions
-            asteroids.forEach((asteroid) => {
+            asteroids.forEach((asteroid, aIndex) => {
                 const dx = spaceship.x - asteroid.x;
                 const dy = spaceship.y - asteroid.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (lives > 0 && distance < spaceship.radius + asteroid.radius && !spaceship.shieldActive) {
-                    lives--;
-                    livesElement.textContent = lives;
-                    sounds.explosion.play();
+                if (distance < spaceship.radius + asteroid.radius) {
+                    if (lives > 0) {
+                        asteroids.splice(aIndex, 1);
+                        lives--;
+                        livesElement.textContent = lives;
 
-                    if (lives <= 0) {
-                        gameOver();
-                    } else {
-                        resetSpaceship();
+                        if (lives === 0) {
+                            gameOver();
+                        }
                     }
                 }
             });
-
-            // Spaceship-PowerUp collisions
-            powerUps.forEach((powerUp, index) => {
-                const dx = spaceship.x - powerUp.x;
-                const dy = spaceship.y - powerUp.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < spaceship.radius + powerUp.radius) {
-                    if (powerUp.type === 'shield') {
-                        spaceship.shieldActive = true;
-                        setTimeout(() => { spaceship.shieldActive = false; }, 5000);
-                    } else {
-                        spaceship.rapidFireActive = true;
-                        setTimeout(() => { spaceship.rapidFireActive = false; }, 5000);
-                    }
-                    powerUps.splice(index, 1);
-                    sounds.powerUp.play();
-                }
-            });
-        }
-
-        function resetSpaceship() {
-            spaceship.x = canvas.width / 2;
-            spaceship.y = canvas.height / 2;
-            spaceship.angle = 0;
-            spaceship.shieldActive = true;
-            setTimeout(() => { spaceship.shieldActive = false; }, 3000);
         }
 
         function gameOver() {
             cancelAnimationFrame(gameLoop);
+            gameOverFlag = true;
             ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#fff';
             ctx.font = '48px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 50);
             ctx.font = '24px Arial';
-            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 50);
-            ctx.fillText('Press Space to Restart', canvas.width / 2, canvas.height / 2 + 100);
+            ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2);
+            ctx.fillText('Press Space to Play Again', canvas.width / 2, canvas.height / 2 + 50);
             sounds.backgroundMusic.stop();
         }
 
@@ -332,72 +192,40 @@
             lives = 3;
             asteroids = [];
             projectiles = [];
-            powerUps = [];
-            bossFight = false;
-            boss = null;
+            gameOverFlag = false;
             scoreElement.textContent = score;
             livesElement.textContent = lives;
-            resetSpaceship();
+            spaceship.x = canvas.width / 2;
+            spaceship.y = canvas.height / 2;
             sounds.backgroundMusic.play();
             gameLoop = requestAnimationFrame(update);
         }
 
         function update() {
+            if (gameOverFlag) return;
+
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             // Move and draw spaceship
             spaceship.draw();
 
-            // Move and draw projectiles
-            projectiles.forEach((projectile, index) => {
-                projectile.x += Math.cos(projectile.angle) * projectile.speed;
-                projectile.y += Math.sin(projectile.angle) * projectile.speed;
-
-                ctx.beginPath();
-                ctx.arc(projectile.x, projectile.y, projectile.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#f00';
-                ctx.fill();
-
-                // Remove projectiles that are off-screen
-                if (projectile.x < 0 || projectile.x > canvas.width ||
-                    projectile.y < 0 || projectile.y > canvas.height) {
-                    projectiles.splice(index, 1);
-                }
-            });
-
             // Move and draw asteroids
-            asteroids.forEach(asteroid => {
+            asteroids.forEach((asteroid) => {
                 asteroid.move();
                 asteroid.draw();
             });
 
-            // Draw power-ups
-            powerUps.forEach(powerUp => powerUp.draw());
-
-            // Boss logic
-            if (boss) {
-                boss.move();
-                boss.draw();
-                boss.attack();
-            }
+            checkCollisions();
 
             // Spawn new asteroids
-            if (Math.random() < 0.02 && asteroids.length < 10 && !bossFight) {
+            if (Math.random() < 0.02 && asteroids.length < 10) {
                 spawnAsteroid();
             }
-
-            // Spawn power-ups
-            if (Math.random() < 0.001) {
-                spawnPowerUp();
-            }
-
-            checkCollisions();
 
             gameLoop = requestAnimationFrame(update);
         }
 
-        // Controls
         document.addEventListener('keydown', (e) => {
             switch (e.key) {
                 case 'ArrowUp':
@@ -413,20 +241,15 @@
                     spaceship.rotate(1);
                     break;
                 case ' ':
-                    if (lives > 0) {
-                        if (spaceship.rapidFireActive) {
-                            spaceship.shoot();
-                        } else if (!projectiles.length) {
-                            spaceship.shoot();
-                        }
-                    } else {
+                    if (gameOverFlag) {
                         restartGame();
+                    } else {
+                        spaceship.shoot();
                     }
                     break;
             }
         });
 
-        // Start the game
         sounds.backgroundMusic.play();
         gameLoop = requestAnimationFrame(update);
     </script>
